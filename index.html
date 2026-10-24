@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>ANIVERSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--card:#0e0916;--line:#2a1a45;--purple:#8b3dff;--purple2:#b78bff;--text:#f4eeff;--muted:#9a8bb5;--err:#ff6b8a;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%}
+body{margin:0;min-height:100%;background:radial-gradient(900px 500px at 50% -10%,#2b0f57 0%,#000 65%) no-repeat,#000;color:var(--text);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center}
+main{width:100%;max-width:440px;padding:28px 20px 40px}
+h1{font-size:2.5rem;line-height:1.05;font-weight:800;margin:56px 0 12px;letter-spacing:-.02em}
+h1 span{color:var(--purple2)}
+p.sub{color:var(--muted);margin:0 0 32px;line-height:1.5}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px}
+button{font:inherit;cursor:pointer;border:0;border-radius:14px;padding:14px 18px;font-weight:600;width:100%}
+.primary{background:linear-gradient(135deg,#7a2bff,#a259ff);color:#fff;box-shadow:0 8px 28px rgba(139,61,255,.35)}
+.google{background:#fff;color:#1a1a1a;display:flex;align-items:center;justify-content:center;gap:10px}
+.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);margin-top:10px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--purple2);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+label{display:block;font-size:.9rem;color:var(--muted);margin:18px 0 6px}
+input,textarea{width:100%;background:#000;border:1px solid var(--line);border-radius:12px;color:var(--text);font:inherit;padding:12px 14px}
+textarea{resize:none;height:90px}
+.count{font-size:.8rem;color:var(--muted);text-align:right;margin-top:4px}
+.avatar-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px}
+.avatar{width:104px;height:104px;border-radius:50%;background:#150c24 center/cover no-repeat;border:2px solid var(--purple);display:grid;place-items:center;font-size:2.2rem;font-weight:800;color:var(--purple2)}
+.link{background:none;color:var(--purple2);width:auto;padding:6px}
+.msg{min-height:1.3em;margin:12px 0 0;font-size:.9rem;color:var(--err)}
+.msg.ok{color:var(--purple2)}
+.demo{background:#1b0f33;border:1px solid var(--line);color:var(--purple2);border-radius:12px;padding:10px 12px;font-size:.82rem;margin-bottom:18px;line-height:1.4}
+.hidden{display:none}
+.me{text-align:center}
+.me h2{margin:12px 0 4px;font-size:1.5rem;overflow-wrap:anywhere}
+.me p{margin:0;color:var(--muted);line-height:1.5}
+@media (prefers-reduced-motion:no-preference){.card{animation:rise .5s ease both}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}}
+</style>
+</head>
+<body>
+<main>
+  <div id="demo" class="demo hidden">Demo mode: Firebase abhi connect nahi hai, isliye login nakli hai.</div>
+
+  <section id="loginView">
+    <h1>ANI<span>VERSE</span></h1>
+    <p class="sub">Lookism, Naruto, JJK, Solo Leveling ke fans ka apna adda. Pehle apna account banao.</p>
+    <div class="card">
+      <button id="googleBtn" class="google">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+        Google se login karo
+      </button>
+      <p id="loginMsg" class="msg"></p>
+    </div>
+  </section>
+
+  <section id="editView" class="hidden">
+    <h1 style="font-size:2rem;margin-top:36px">Apna profile banao</h1>
+    <p class="sub">Photo, username aur bio. Baad mein badal sakte ho.</p>
+    <div class="card">
+      <div class="avatar-wrap">
+        <div id="avatarEdit" class="avatar">?</div>
+        <button id="pickPhoto" class="link" type="button">Photo chuno</button>
+        <input id="photoInput" type="file" accept="image/*" class="hidden">
+      </div>
+      <label for="username">Username</label>
+      <input id="username" autocomplete="off" placeholder="Koi bhi naam likho">
+      <label for="bio">Bio</label>
+      <textarea id="bio" maxlength="150" placeholder="Tumhara favourite anime ya manhwa kaun sa hai?"></textarea>
+      <div class="count"><span id="bioCount">0</span>/150</div>
+      <p id="editMsg" class="msg"></p>
+      <button id="saveBtn" class="primary">Profile save karo</button>
+      <button id="logoutBtn1" class="ghost">Logout</button>
+    </div>
+  </section>
+
+  <section id="meView" class="hidden">
+    <h1 style="font-size:2rem;margin-top:36px">Swagat hai!</h1>
+    <p class="sub">Tumhara profile ready hai. Groups jaldi aa rahe hain.</p>
+    <div class="card me">
+      <div id="avatarView" class="avatar" style="margin:0 auto"></div>
+      <h2 id="nameView"></h2>
+      <p id="bioView"></p>
+      <button id="editBtn" class="primary" style="margin-top:22px">Profile badlo</button>
+      <button id="logoutBtn2" class="ghost">Logout</button>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
+<script>
+// ====== FIREBASE CONFIG ======
+const firebaseConfig = {
+  apiKey: "AIzaSyAg23cKCffPh0CuK22xtKthTrm8lLBTFpA",
+  authDomain: "anime-manhwa-room.firebaseapp.com",
+  projectId: "anime-manhwa-room",
+  appId: "1:847701666837:web:84d6c94e6f11239785f21c"
+};
+// =============================
+
+const live = !!firebaseConfig.apiKey && typeof firebase !== "undefined";
+const $ = id => document.getElementById(id);
+let user = null, profile = null, photoData = "";
+let auth, db;
+
+if (live) { firebase.initializeApp(firebaseConfig); auth = firebase.auth(); db = firebase.firestore(); }
+else { $("demo").classList.remove("hidden"); }
+
+const mem = {};
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return mem[k] || null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){ mem[k] = v; } },
+  del(k){ try { localStorage.removeItem(k); } catch(e){ delete mem[k]; } }
+};
+
+function show(id){ ["loginView","editView","meView"].forEach(v => $(v).classList.toggle("hidden", v !== id)); }
+function setAvatar(el, photo, name){
+  el.style.backgroundImage = photo ? "url(" + photo + ")" : "none";
+  el.textContent = photo ? "" : ((name || "?")[0] || "?").toUpperCase();
+}
+function say(id, text, ok){ const m = $(id); m.textContent = text || ""; m.classList.toggle("ok", !!ok); }
+
+async function loadProfile(){
+  if (live) { const d = await db.collection("users").doc(user.uid).get(); return d.exists ? d.data() : null; }
+  const raw = store.get("demo_profile"); return raw ? JSON.parse(raw) : null;
+}
+async function saveProfile(p){
+  if (live) await db.collection("users").doc(user.uid).set({ ...p, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  else store.set("demo_profile", JSON.stringify(p));
+}
+
+async function enter(u){
+  user = u;
+  profile = await loadProfile();
+  if (profile) showProfile(); else openEditor();
+}
+function showProfile(){
+  setAvatar($("avatarView"), profile.photo, profile.username);
+  $("nameView").textContent = "@" + profile.username;
+  $("bioView").textContent = profile.bio || "Bio abhi khaali hai.";
+  show("meView");
+}
+function openEditor(){
+  photoData = (profile && profile.photo) || "";
+  $("username").value = (profile && profile.username) || "";
+  $("bio").value = (profile && profile.bio) || "";
+  $("bioCount").textContent = $("bio").value.length;
+  setAvatar($("avatarEdit"), photoData, $("username").value);
+  say("editMsg", "");
+  show("editView");
+}
+
+$("googleBtn").onclick = async () => {
+  say("loginMsg", "");
+  if (!live) { await enter({ uid: "demo", displayName: "Demo User" }); return; }
+  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch (e) { say("loginMsg", "Login nahi hua. Dobara try karo. (" + (e.code || "error") + ")"); }
+};
+if (live) auth.onAuthStateChanged(u => { if (u) enter(u); else show("loginView"); });
+
+function logout(){
+  if (live) auth.signOut(); else { user = null; profile = null; show("loginView"); }
+}
+$("logoutBtn1").onclick = logout; $("logoutBtn2").onclick = logout;
+$("editBtn").onclick = openEditor;
+
+$("bio").oninput = () => { $("bioCount").textContent = $("bio").value.length; };
+$("username").oninput = () => { if (!photoData) setAvatar($("avatarEdit"), "", $("username").value); };
+$("pickPhoto").onclick = () => $("photoInput").click();
+$("photoInput").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const s = 160, c = document.createElement("canvas"); c.width = c.height = s;
+    const m = Math.min(img.width, img.height);
+    c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s);
+    photoData = c.toDataURL("image/jpeg", 0.8);
+    setAvatar($("avatarEdit"), photoData); URL.revokeObjectURL(url);
+  };
+  img.onerror = () => say("editMsg", "Ye photo khul nahi payi. Doosri chuno.");
+  img.src = url;
+};
+
+$("saveBtn").onclick = async () => {
+  const username = $("username").value.trim();
+  if (!username) { say("editMsg", "Username khaali nahi ho sakta."); return; }
+  const btn = $("saveBtn"); btn.disabled = true;
+  try {
+    profile = { username, bio: $("bio").value.trim(), photo: photoData };
+    await saveProfile(profile);
+    showProfile();
+  } catch (e) { say("editMsg", "Save nahi hua. Internet check karo aur dobara try karo."); }
+  btn.disabled = false;
+};
+
+if (!live) show("loginView");
+</script>
+</body>
+  </html>
