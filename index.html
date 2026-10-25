@@ -47,6 +47,9 @@ textarea{resize:none;height:80px}
 .urow .info{min-width:0;flex:1}
 .urow .info p{margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .col{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.counts{display:flex;justify-content:center;gap:24px;margin:14px 0 4px}
+.cnt{text-align:center;color:var(--muted);font-size:.85rem;cursor:pointer}
+.cnt b{display:block;font-size:1.3rem;color:var(--text)}
 .notice{background:#1b0f33;border:1px solid var(--line);color:var(--purple2);border-radius:12px;padding:12px;text-align:center}
 .avatar{width:96px;height:96px;border-radius:50%;border:2px solid var(--purple);background:#150c24 center/cover no-repeat;display:grid;place-items:center;font-size:2rem;font-weight:800;color:var(--purple2);margin:0 auto}
 .center{text-align:center}
@@ -55,6 +58,7 @@ textarea{resize:none;height:80px}
 .bubble.mine{align-self:flex-end;background:#2a1152;border-color:#4b2a86}
 .bubble .acts{display:flex;gap:4px;flex-wrap:wrap}
 .meta{font-size:.75rem;color:var(--muted);margin-bottom:4px}
+.meta .who{color:var(--text);font-weight:700;cursor:pointer}
 .text{white-space:pre-wrap}
 .composer{display:flex;gap:8px}
 .composer button{padding:0 18px}
@@ -63,10 +67,13 @@ textarea{resize:none;height:80px}
 .nav button.on{color:#fff;background:#2a1152}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#2a1152;border:1px solid var(--purple);padding:10px 16px;border-radius:12px;font-size:.9rem;max-width:90%;z-index:9}
 .empty{color:var(--muted);text-align:center;padding:18px 0}
+.bell{position:fixed;top:12px;right:12px;width:44px;height:44px;border-radius:50%;background:#120a1f;border:1px solid var(--line);font-size:1.1rem;padding:0;z-index:6}
+.badge{position:absolute;top:-4px;right:-4px;background:#ff3b6b;color:#fff;font-size:.7rem;min-width:18px;height:18px;border-radius:9px;display:grid;place-items:center;padding:0 4px}
 </style>
 </head>
 <body>
 <main id="root"></main>
+<button id="bell" class="bell" data-act="go" data-id="notifs" hidden>🔔<span id="bcount" class="badge" hidden></span></button>
 <nav id="nav" class="nav" hidden></nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
@@ -103,15 +110,16 @@ const GROUPS = [
 const CATS = [["all", "All"], ...Object.entries(CAT_LABEL)];
 
 // ===== STATE & HELPERS =====
-const S = { user: null, profile: null, admin: false, tab: "", room: null, dm: null, q: "", lastSearch: "",
-  cat: "all", groups: {}, joined: new Set(), blocked: new Set(), blockedDocs: [], chatDocs: [],
-  pendingPhoto: null, authUnsub: [], viewUnsub: [], dataOn: false };
+const S = { user: null, profile: null, admin: false, tab: "", room: null, dm: null, viewUid: null, listKind: "followers",
+  q: "", lastSearch: "", cat: "all", groups: {}, joined: new Set(), blocked: new Set(), blockedDocs: [],
+  following: new Set(), unread: 0, chatDocs: [], pendingPhoto: null, authUnsub: [], viewUnsub: [], dataOn: false };
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const when = t => t && t.toMillis ? new Date(t.toMillis()).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "";
 const initial = p => esc(((p.username || "?")[0] || "?").toUpperCase());
 const avatarBg = p => p ? `style="background-image:url('${p}')"` : "";
 const put = html => { document.getElementById("root").innerHTML = html; };
 const setList = html => { const el = document.getElementById("list"); if (el) el.innerHTML = html; };
+const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 const toast = msg => { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); };
 function listen(q, cb) { S.viewUnsub.push(q.onSnapshot(cb, e => toast("Error: " + (e.code || e.message)))); }
 function clearView() { S.viewUnsub.forEach(f => f()); S.viewUnsub = []; }
@@ -137,7 +145,7 @@ function resizePhoto(file) {
 // ===== AUTH & DATA =====
 auth.onAuthStateChanged(async user => {
   S.authUnsub.forEach(f => f()); S.authUnsub = []; S.dataOn = false;
-  S.groups = {}; S.joined = new Set(); S.blocked = new Set(); S.blockedDocs = []; S.chatDocs = [];
+  S.groups = {}; S.joined = new Set(); S.blocked = new Set(); S.blockedDocs = []; S.chatDocs = []; S.following = new Set();
   clearView();
   S.user = user;
   if (!user) return renderLogin();
@@ -157,23 +165,34 @@ auth.onAuthStateChanged(async user => {
 function startData() {
   if (S.dataOn) return;
   S.dataOn = true;
+  const me = S.user.uid;
   S.authUnsub.push(db.collection("groups").onSnapshot(snap => {
     S.groups = {};
     snap.docs.forEach(d => { S.groups[d.id] = d.data(); });
     if (S.tab === "groups") renderGroupList();
   }, e => toast("Groups error: " + (e.code || e.message))));
-  S.authUnsub.push(db.collection("users").doc(S.user.uid).collection("groups").onSnapshot(snap => {
+  S.authUnsub.push(db.collection("users").doc(me).collection("groups").onSnapshot(snap => {
     S.joined = new Set(snap.docs.map(d => d.id));
     if (S.tab === "groups") renderGroupList();
     if (S.tab === "room" || S.tab === "members") go(S.tab);
   }, () => {}));
-  S.authUnsub.push(db.collection("users").doc(S.user.uid).collection("blocked").onSnapshot(snap => {
+  S.authUnsub.push(db.collection("users").doc(me).collection("blocked").onSnapshot(snap => {
     S.blockedDocs = snap.docs.map(d => ({ id: d.id, username: d.data().username || "User" }));
     S.blocked = new Set(S.blockedDocs.map(b => b.id));
     if (S.tab === "chats") renderChats();
     else if (S.tab === "profile") renderBlockedList();
     else if (S.tab === "search") runSearch(S.lastSearch);
+    else if (S.tab === "user") go("user");
     else if (S.tab === "dm" || S.tab === "room") go(S.tab);
+  }, () => {}));
+  S.authUnsub.push(db.collection("users").doc(me).collection("following").onSnapshot(snap => {
+    S.following = new Set(snap.docs.map(d => d.id));
+    if (S.tab === "user") go("user");
+    if (S.tab === "flist") go("flist");
+  }, () => {}));
+  S.authUnsub.push(db.collection("users").doc(me).collection("notifications").where("read", "==", false).onSnapshot(snap => {
+    S.unread = snap.size;
+    updateBell();
   }, () => {}));
 }
 
@@ -220,17 +239,20 @@ const TABS = [["groups", "Groups"], ["chats", "Chats"], ["search", "Search"], ["
 function setNav(on) {
   const nav = document.getElementById("nav");
   nav.hidden = !on;
+  document.getElementById("bell").hidden = !on;
   if (!on) { nav.innerHTML = ""; return; }
-  const map = { room: "groups", members: "groups", dm: "chats", edit: "profile" };
+  const map = { room: "groups", members: "groups", dm: "chats", edit: "profile", user: "search", flist: "profile" };
   const active = map[S.tab] || S.tab;
   nav.innerHTML = TABS.filter(([id]) => id !== "admin" || S.admin)
     .map(([id, label]) => `<button data-act="go" data-id="${id}" class="${active === id ? "on" : ""}">${label}</button>`).join("");
 }
 const VIEWS = { groups: viewGroups, chats: viewChats, search: viewSearch, profile: viewProfile,
-  admin: viewAdmin, room: viewRoom, dm: viewDm, members: viewMembers };
+  admin: viewAdmin, room: viewRoom, dm: viewDm, members: viewMembers, user: viewUser, flist: viewFlist, notifs: viewNotifs };
 function go(tab, arg) {
   if (tab === "admin" && !S.admin) tab = "groups";
+  if (tab === "user" && arg === S.user.uid) tab = "profile";
   if (tab === "room" && arg) S.room = arg;
+  if ((tab === "user" || tab === "flist") && arg) S.viewUid = arg;
   S.tab = tab; clearView(); setNav(true); window.scrollTo(0, 0);
   VIEWS[tab]();
 }
@@ -347,7 +369,7 @@ function viewMembers() {
   listen(db.collection("groups").doc(gid).collection("members"), snap => {
     setList(snap.docs.map(d => {
       const m = d.data(), me = d.id === S.user.uid;
-      return `<div class="urow"><span>@${esc(m.username || "User")}${me ? " (you)" : ""}</span>
+      return `<div class="urow"><span class="link" data-act="user" data-id="${d.id}" style="padding:0">@${esc(m.username || "User")}${me ? " (you)" : ""}</span>
         ${S.admin && !me ? `<button class="link danger" data-act="remove" data-id="${d.id}" data-gid="${gid}">Remove</button>` : ""}</div>`;
     }).join("") || `<p class="empty">No members yet.</p>`);
   });
@@ -362,13 +384,23 @@ function msgHTML(d, path) {
     acts.push(`<button class="link danger" data-act="delMsg" data-path="${path}/${d.id}">Delete</button>`);
   if (!mine)
     acts.push(`<button class="link" data-act="block" data-id="${esc(m.uid)}" data-name="${esc(m.username)}">Block</button>`);
-  return `<div class="bubble${mine ? " mine" : ""}"><div class="meta"><b>${esc(m.username)}</b> · ${when(m.createdAt)}</div>
+  const who = mine ? `<b>${esc(m.username)}</b>`
+    : `<b class="who" data-act="user" data-id="${esc(m.uid)}">${esc(m.username)}</b>`;
+  return `<div class="bubble${mine ? " mine" : ""}"><div class="meta">${who} · ${when(m.createdAt)}</div>
     <div class="text">${esc(m.text)}</div><div class="acts">${acts.join("")}</div></div>`;
 }
 async function sendGroup(gid, text) {
   await db.collection("groups").doc(gid).collection("messages").add({
     uid: S.user.uid, username: S.profile.username, text: text.slice(0, 500), createdAt: FV.serverTimestamp()
   });
+  if (text.includes("@")) {
+    const low = text.toLowerCase();
+    const snap = await db.collection("groups").doc(gid).collection("members").get();
+    snap.docs.forEach(d => {
+      const u = String(d.data().username || "").toLowerCase();
+      if (d.id !== S.user.uid && u && low.includes("@" + u)) notify(d.id, "mention", { gid, text });
+    });
+  }
 }
 
 // ===== CHATS (DM LIST) =====
@@ -409,7 +441,7 @@ function viewDm() {
         ? `<button class="ghost small" data-act="unblock" data-id="${otherUid}">Unblock</button>`
         : `<button class="link danger" data-act="block" data-id="${otherUid}" data-name="${esc(name)}">Block</button>`}
     </div>
-    <h2>@${esc(name)}</h2>
+    <h2 class="link" data-act="user" data-id="${otherUid}" style="padding:0">@${esc(name)}</h2>
     <div id="msgs" class="chat"></div>
     ${blocked
       ? `<div class="notice">You blocked this user. Unblock to chat again.</div>`
@@ -432,6 +464,7 @@ async function sendDm(text) {
     uid: S.user.uid, username: S.profile.username, text: text.slice(0, 500), createdAt: FV.serverTimestamp()
   });
   await ref.update({ last: text.slice(0, 60), lastAt: FV.serverTimestamp() });
+  notify(otherUid, "dm", {});
 }
 
 // ===== SEARCH =====
@@ -454,7 +487,7 @@ async function runSearch(raw) {
     const snap = await db.collection("users").orderBy("usernameLower").startAt(q).endAt(q + "\uf8ff").limit(20).get();
     const rows = snap.docs.filter(d => d.id !== S.user.uid).map(d => {
       const u = d.data(), b = S.blocked.has(d.id);
-      return `<div class="urow"><div class="info"><b>@${esc(u.username)}</b><p class="muted">${esc(u.bio || "")}</p></div>
+      return `<div class="urow"><div class="info"><b class="link" data-act="user" data-id="${d.id}" style="padding:0">@${esc(u.username)}</b><p class="muted">${esc(u.bio || "")}</p></div>
         <div class="col">
           ${b ? "" : `<button class="primary small" data-act="dm" data-id="${d.id}" data-name="${esc(u.username)}">Message</button>`}
           <button class="link ${b ? "" : "danger"}" data-act="${b ? "unblock" : "block"}" data-id="${d.id}" data-name="${esc(u.username)}">${b ? "Unblock" : "Block"}</button>
@@ -462,6 +495,117 @@ async function runSearch(raw) {
     }).join("");
     setList(rows || `<p class="empty">No users found.</p>`);
   } catch (e) { setList(`<p class="empty">Search failed: ${esc(e.code || e.message)}</p>`); }
+}
+
+// ===== USER PROFILE (OTHER PEOPLE) =====
+async function viewUser() {
+  const uid = S.viewUid;
+  put(`<div class="hdr"><button class="ghost small" data-act="go" data-id="search">← Back</button></div><p class="empty">Loading...</p>`);
+  let snap;
+  try { snap = await db.collection("users").doc(uid).get(); }
+  catch (e) { return put(`<p class="empty">Could not load profile (${esc(e.code || e.message)}).</p>`); }
+  if (S.tab !== "user" || S.viewUid !== uid) return;
+  if (!snap.exists) return put(`<div class="hdr"><button class="ghost small" data-act="go" data-id="search">← Back</button></div><p class="empty">This user has not created a profile yet.</p>`);
+  const u = snap.data(), blocked = S.blocked.has(uid), following = S.following.has(uid);
+  put(`<div class="hdr"><button class="ghost small" data-act="go" data-id="search">← Back</button></div>
+    <div class="card center">
+      <div class="avatar" ${avatarBg(u.photo)}>${u.photo ? "" : initial(u)}</div>
+      <h3 style="margin-top:12px">@${esc(u.username)}</h3>
+      <p class="muted">${esc(u.bio || "No bio yet.")}</p>
+      <div class="counts">
+        <div class="cnt" data-act="flist" data-id="${uid}" data-kind="followers"><b id="ucf">0</b>followers</div>
+        <div class="cnt" data-act="flist" data-id="${uid}" data-kind="following"><b id="ucg">0</b>following</div>
+      </div>
+      <div class="stack" style="margin-top:12px">
+        <button class="${following ? "ghost" : "primary"} block" data-act="follow" data-id="${uid}" data-name="${esc(u.username)}">${following ? "Following ✓ (tap to unfollow)" : "Follow"}</button>
+        ${blocked
+          ? `<button class="ghost block" data-act="unblock" data-id="${uid}">Unblock</button>`
+          : `<button class="primary block" data-act="dm" data-id="${uid}" data-name="${esc(u.username)}">Message</button>
+             <button class="ghost block" data-act="block" data-id="${uid}" data-name="${esc(u.username)}">Block</button>`}
+      </div>
+    </div>`);
+  listen(db.collection("users").doc(uid).collection("followers"), s => setText("ucf", s.size));
+  listen(db.collection("users").doc(uid).collection("following"), s => setText("ucg", s.size));
+}
+
+async function toggleFollow(uid, name) {
+  if (!uid || uid === S.user.uid) return;
+  const batch = db.batch();
+  const myF = db.collection("users").doc(S.user.uid).collection("following").doc(uid);
+  const theirF = db.collection("users").doc(uid).collection("followers").doc(S.user.uid);
+  if (S.following.has(uid)) {
+    batch.delete(myF); batch.delete(theirF);
+    await batch.commit();
+    toast("Unfollowed");
+  } else {
+    batch.set(myF, { username: name || "User", createdAt: FV.serverTimestamp() });
+    batch.set(theirF, { username: S.profile.username, createdAt: FV.serverTimestamp() });
+    batch.set(db.collection("users").doc(uid).collection("notifications").doc(), {
+      from: S.user.uid, fromName: S.profile.username, type: "follow", text: "", gid: "", read: false, createdAt: FV.serverTimestamp()
+    });
+    await batch.commit();
+    toast("Following");
+  }
+}
+
+function viewFlist() {
+  const uid = S.viewUid, kind = S.listKind;
+  const title = kind === "followers" ? "Followers" : "Following";
+  put(`<div class="hdr"><button class="ghost small" data-act="go" data-id="${uid === S.user.uid ? "profile" : "user"}">← Back</button></div>
+    <h2>${title}</h2>
+    <div id="list" class="stack"><p class="empty">Loading...</p></div>`);
+  listen(db.collection("users").doc(uid).collection(kind), snap => {
+    setList(snap.docs.filter(d => d.id !== S.user.uid).map(d => {
+      const x = d.data(), name = esc(x.username || "User"), f = S.following.has(d.id);
+      const btn = f
+        ? `<button class="ghost small" data-act="follow" data-id="${d.id}" data-name="${name}">Following</button>`
+        : `<button class="primary small" data-act="follow" data-id="${d.id}" data-name="${name}">${kind === "followers" ? "Follow back" : "Follow"}</button>`;
+      return `<div class="urow"><span class="link" data-act="user" data-id="${d.id}" style="padding:0">@${name}</span>${btn}</div>`;
+    }).join("") || `<p class="empty">Nothing here yet.</p>`);
+  });
+}
+
+// ===== NOTIFICATIONS =====
+function notify(toUid, type, extra) {
+  if (!toUid || toUid === S.user.uid) return Promise.resolve();
+  return db.collection("users").doc(toUid).collection("notifications").add({
+    from: S.user.uid, fromName: S.profile.username, type, text: (extra && extra.text) || "",
+    gid: (extra && extra.gid) || "", read: false, createdAt: FV.serverTimestamp()
+  }).catch(() => {});
+}
+function notifLabel(n) {
+  if (n.type === "follow") return `@${n.fromName} ne tumhe follow kiya`;
+  if (n.type === "dm") return `@${n.fromName} ne tumhe message kiya`;
+  if (n.type === "mention") return `@${n.fromName} ne group mein tumhara naam liya`;
+  return `@${n.fromName}`;
+}
+function updateBell() {
+  const badge = document.getElementById("bcount");
+  if (!badge) return;
+  badge.hidden = !S.unread;
+  badge.textContent = S.unread > 9 ? "9+" : String(S.unread);
+}
+function viewNotifs() {
+  put(`<div class="hdr"><h2>Notifications</h2><button class="ghost small" data-act="readall">Mark all read</button></div>
+    <div id="list" class="stack"></div>`);
+  listen(db.collection("users").doc(S.user.uid).collection("notifications").orderBy("createdAt", "desc").limit(60), snap => {
+    snap.docs.slice(50).forEach(d => d.ref.delete().catch(() => {}));
+    setList(snap.docs.slice(0, 50).map(d => {
+      const n = d.data();
+      return `<button class="row-btn" data-act="notif" data-id="${d.id}" data-type="${esc(n.type)}" data-from="${esc(n.from)}" data-name="${esc(n.fromName)}" data-gid="${esc(n.gid || "")}" style="${n.read ? "" : "border-color:var(--purple)"}"><b>${esc(notifLabel(n))}</b><small class="muted">${when(n.createdAt)}</small></button>`;
+    }).join("") || `<p class="empty">No notifications yet.</p>`);
+  });
+}
+async function markRead(id) {
+  await db.collection("users").doc(S.user.uid).collection("notifications").doc(id).update({ read: true });
+}
+async function readAll() {
+  const snap = await db.collection("users").doc(S.user.uid).collection("notifications").where("read", "==", false).limit(400).get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+  await batch.commit();
+  toast("All marked read");
 }
 
 // ===== BLOCK / UNBLOCK =====
@@ -476,7 +620,7 @@ async function unblockUser(uid) {
   toast("User unblocked");
 }
 
-// ===== PROFILE =====
+// ===== PROFILE (OWN) =====
 function viewProfile() {
   const p = S.profile;
   put(`<h2>Your profile</h2>
@@ -484,12 +628,18 @@ function viewProfile() {
       <div class="avatar" ${avatarBg(p.photo)}>${p.photo ? "" : initial(p)}</div>
       <h3 style="margin-top:12px">@${esc(p.username)}</h3>
       <p class="muted">${esc(p.bio || "No bio yet.")}</p>
-      <p class="muted">Groups joined: ${S.joined.size}</p>
+      <div class="counts">
+        <div class="cnt" data-act="flist" data-id="${S.user.uid}" data-kind="followers"><b id="pcf">0</b>followers</div>
+        <div class="cnt" data-act="flist" data-id="${S.user.uid}" data-kind="following"><b id="pcg">0</b>following</div>
+        <div class="cnt"><b>${S.joined.size}</b>groups</div>
+      </div>
       <button class="primary block" data-act="edit">Edit profile</button>
       <button class="ghost block" data-act="logout" style="margin-top:10px">Log out</button>
     </div>
     <h3 style="margin:18px 0 10px">Blocked users</h3>
     <div id="blist" class="stack"></div>`);
+  listen(db.collection("users").doc(S.user.uid).collection("followers"), s => setText("pcf", s.size));
+  listen(db.collection("users").doc(S.user.uid).collection("following"), s => setText("pcg", s.size));
   renderBlockedList();
 }
 function renderBlockedList() {
@@ -536,6 +686,9 @@ document.addEventListener("click", async e => {
       case "members": go("members"); break;
       case "remove": await removeMember(d.gid, d.id); break;
       case "edit": renderSetup(true); break;
+      case "user": go("user", d.id); break;
+      case "flist": S.listKind = d.kind; go("flist", d.id); break;
+      case "follow": await toggleFollow(d.id, d.name); break;
       case "dm": await openDm(d.id, d.name); break;
       case "block": await blockUser(d.id, d.name); break;
       case "unblock": await unblockUser(d.id); break;
@@ -543,6 +696,14 @@ document.addEventListener("click", async e => {
         if (confirm("Delete this message?")) await db.doc(d.path).delete();
         break;
       case "seed": await seedGroups(); break;
+      case "readall": await readAll(); break;
+      case "notif": {
+        await markRead(d.id).catch(() => {});
+        if (d.type === "follow") go("user", d.from);
+        else if (d.type === "dm") await openDm(d.from, d.name);
+        else if (d.type === "mention") { if (S.joined.has(d.gid)) go("room", d.gid); else go("groups"); }
+        break;
+      }
     }
   } catch (err) { toast(err.message || err.code || "Something went wrong"); }
 });
